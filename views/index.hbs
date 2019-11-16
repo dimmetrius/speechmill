@@ -1,0 +1,35 @@
+<h1>SpeechMill</h1>
+
+<h2>Upload your video</h2>
+<form id="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
+  <h2>Select an video to upload:</h2>
+  <div class="upload-container"><input id="file-picker" type="file" name="image"></div>
+  <div><input type="submit" value="Upload Video"></div>
+</form>
+
+<p id="message">{{message}}</p>
+
+<h2>Processed Videos</h2>
+{{#each this.thumbnails}}
+  <video width="300" height="170" src="https://{{../accountName}}.blob.core.windows.net/{{../containerName}}/{{name}}"></video>
+{{/each}}
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+      const message = document.getElementById('message');
+      const picker = document.getElementById('file-picker');
+
+      document.getElementById('upload-form').addEventListener('submit', (e) => {
+
+        message.innerText = '';
+
+        if (!picker.files.length) {
+          message.innerText = 'Please select an video to upload.';
+          e.preventDefault();
+          return false;
+        }
+      });
+
+    });
+  </script>

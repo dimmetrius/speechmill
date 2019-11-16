@@ -5,6 +5,10 @@
  */
 'use strict';
 
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').load();
+}
+
 const os = require('os');
 const async = require('async');
 const util = require('util');
@@ -28,6 +32,8 @@ const _log = value => {
   console.log(new Date(), value);
 };
 
+const DELETE_ASSETS = true;
+
 // endpoint config
 // make sure your URL values end with '/'
 
@@ -49,13 +55,6 @@ const namePrefix = 'prefix';
 
 // You can either specify a local input file with the inputFile or an input Url with inputUrl.  Set the other one to null.
 
-// const inputUrl = null;
-// const inputFile = "c:\\temp\\input.mp4";
-
-const inputFile = './Temp/Junction_2018_After_Movie.mp4';
-const inputUrl =
-  'https://amssamples.streaming.mediaservices.windows.net/2e91931e-0d29-482b-a42b-9aadc93eb825/AzurePromo.mp4';
-
 // These are the names used for creating and finding your transforms
 const audioAnalyzerTransformName = 'AudioAnalyzerTransform';
 const videoAnalyzerTransformName = 'VideoAnalyzerTransform';
@@ -66,8 +65,214 @@ const timeoutSeconds = 60 * 10;
 const sleepInterval = 1000 * 15;
 
 let azureMediaServicesClient;
-let inputExtension;
 let blobName = null;
+
+const processVideBlob = async (id, nm) => {
+  const inputUrl =
+    'https://speechmillstorage.blob.core.windows.net/videos/' + id + '/' + nm;
+
+  let inputExtension = path.extname(inputUrl);
+
+  async function getJobInputFromArguments(
+    //resourceGroup,
+    //accountName,
+    uniqueness
+  ) {
+    return {
+      odatatype: '#Microsoft.Media.JobInputHttp',
+      files: [inputUrl],
+    };
+  }
+
+  async function downloadResults(
+    resourceGroup,
+    accountName,
+    assetName,
+    resultsFolder
+  ) {
+    let date = new Date();
+    date.setHours(date.getHours() + 1);
+    let input = {
+      permissions: 'Read',
+      expiryTime: date,
+    };
+    let assetContainerSas = await azureMediaServicesClient.assets.listContainerSas(
+      resourceGroup,
+      accountName,
+      assetName,
+      input
+    );
+
+    let containerSasUrl = assetContainerSas.assetContainerSasUrls[0] || null;
+    let sasUri = url.parse(containerSasUrl);
+    let sharedBlobService = azureStorage.createBlobServiceWithSas(
+      sasUri.host,
+      sasUri.search
+    );
+    let containerName = sasUri.pathname.replace(/^\/+/g, '');
+    let directory = path.join(resultsFolder, assetName);
+    try {
+      fs.mkdirSync(directory);
+    } catch (err) {
+      // directory exists
+    }
+    _log(`gathering blobs in container ${containerName}...`);
+    function createBlobListPromise() {
+      return new Promise(function(resolve, reject) {
+        return sharedBlobService.listBlobsSegmented(
+          containerName,
+          null,
+          (err, result, response) => {
+            if (err) {
+              reject(err);
+            }
+            resolve(result);
+          }
+        );
+      });
+    }
+    let blobs = await createBlobListPromise();
+    _log('downloading blobs to local directory in background...');
+    const service = azureStorage.createBlobService();
+    for (let i = 0; i < blobs.entries.length; i++) {
+      let blob = blobs.entries[i];
+      if (blob.blobType == 'BlockBlob') {
+        sharedBlobService.getBlobToLocalFile(
+          containerName,
+          blob.name,
+          path.join(directory, blob.name),
+          (error, result) => {
+            try {
+              service.createBlockBlobFromLocalFile(
+                'transcriptions',
+                id + '/' + blob.name,
+                path.join(directory, blob.name),
+                function(error, result, response) {
+                  if (!error) {
+                    // file uploaded
+                  } else {
+                    _log(error);
+                  }
+                }
+              );
+            } catch (e) {
+              _log(e);
+            }
+            if (error) _log(error);
+          }
+        );
+      }
+    }
+  }
+
+  function selectTransform(preset) {
+    if (
+      audioExtensions.indexOf(inputExtension) > -1 ||
+      preset == AUDIO_ANALIZE
+    ) {
+      return audioAnalyzerTransformName;
+    } else {
+      return videoAnalyzerTransformName;
+    }
+  }
+
+  try {
+    // Ensure that you have customized transforms for the AudioAnalyzer and VideoAnalyzer.  This is really a one time setup operation.
+    _log('creating audio analyzer transform...');
+    let audioAnalyzerTransform = await ensureTransformExists(
+      resourceGroup,
+      accountName,
+      audioAnalyzerTransformName,
+      audioAnalyzerPreset()
+    );
+    _log('creating video analyzer transform...');
+    let videoAnalyzerTransform = await ensureTransformExists(
+      resourceGroup,
+      accountName,
+      videoAnalyzerTransformName,
+      videoAnalyzerPreset()
+    );
+
+    _log('getting job input from arguments...');
+    let uniqueness = uuidv4();
+    let input = await getJobInputFromArguments(uniqueness);
+    let outputAssetName = namePrefix + '-output-' + uniqueness;
+    let jobName = namePrefix + '-job-' + uniqueness;
+
+    _log('creating output asset...');
+    let outputAsset = await createOutputAsset(
+      resourceGroup,
+      accountName,
+      outputAssetName
+    );
+
+    // Choose between the Audio and Video analyzer transforms
+    let transformName = selectTransform(AUDIO_ANALIZE);
+
+    _log('submitting job...');
+    let job = await submitJob(
+      resourceGroup,
+      accountName,
+      transformName,
+      jobName,
+      input,
+      outputAsset.name
+    );
+
+    _log('waiting for job to finish...');
+    job = await waitForJobToFinish(
+      resourceGroup,
+      accountName,
+      transformName,
+      jobName
+    );
+
+    if (job.state == 'Finished') {
+      await downloadResults(
+        resourceGroup,
+        accountName,
+        outputAsset.name,
+        outputFolder
+      );
+
+      _log('deleting jobs');
+      await azureMediaServicesClient.jobs.deleteMethod(
+        resourceGroup,
+        accountName,
+        transformName,
+        jobName
+      );
+
+      if (DELETE_ASSETS) {
+        _log('deleting assets...');
+        await azureMediaServicesClient.assets.deleteMethod(
+          resourceGroup,
+          accountName,
+          outputAsset.name
+        );
+
+        let jobInputAsset = input;
+        if (jobInputAsset && jobInputAsset.assetName) {
+          await azureMediaServicesClient.assets.deleteMethod(
+            resourceGroup,
+            accountName,
+            jobInputAsset.assetName
+          );
+        }
+      }
+    } else if (job.state == 'Error') {
+      _log(`${job.name} failed. Error details:`);
+      _log(job.outputs[0].error);
+    } else if (job.state == 'Canceled') {
+      _log(`${job.name} was unexpectedly canceled.`);
+    } else {
+      _log(`${job.name} is still in progress.  Current state is ${job.state}.`);
+    }
+    _log('done with sample');
+  } catch (err) {
+    _log(err);
+  }
+};
 
 msRestAzure.loginWithServicePrincipalSecret(
   aadClientId,
@@ -89,166 +294,9 @@ msRestAzure.loginWithServicePrincipalSecret(
       { noRetryPolicy: true }
     );
 
-    parseArguments();
-    try {
-      // Ensure that you have customized transforms for the AudioAnalyzer and VideoAnalyzer.  This is really a one time setup operation.
-      _log('creating audio analyzer transform...');
-      let audioAnalyzerTransform = await ensureTransformExists(
-        resourceGroup,
-        accountName,
-        audioAnalyzerTransformName,
-        audioAnalyzerPreset()
-      );
-      _log('creating video analyzer transform...');
-      let videoAnalyzerTransform = await ensureTransformExists(
-        resourceGroup,
-        accountName,
-        videoAnalyzerTransformName,
-        videoAnalyzerPreset()
-      );
-
-      _log('getting job input from arguments...');
-      let uniqueness = uuidv4();
-      let input = await getJobInputFromArguments(uniqueness);
-      let outputAssetName = namePrefix + '-output-' + uniqueness;
-      let jobName = namePrefix + '-job-' + uniqueness;
-
-      _log('creating output asset...');
-      let outputAsset = await createOutputAsset(
-        resourceGroup,
-        accountName,
-        outputAssetName
-      );
-
-      // Choose between the Audio and Video analyzer transforms
-      let transformName = selectTransform(AUDIO_ANALIZE);
-
-      _log('submitting job...');
-      let job = await submitJob(
-        resourceGroup,
-        accountName,
-        transformName,
-        jobName,
-        input,
-        outputAsset.name
-      );
-
-      _log('waiting for job to finish...');
-      job = await waitForJobToFinish(
-        resourceGroup,
-        accountName,
-        transformName,
-        jobName
-      );
-
-      if (job.state == 'Finished') {
-        await downloadResults(
-          resourceGroup,
-          accountName,
-          outputAsset.name,
-          outputFolder
-        );
-        _log('deleting jobs and assets...');
-        await azureMediaServicesClient.jobs.deleteMethod(
-          resourceGroup,
-          accountName,
-          transformName,
-          jobName
-        );
-        await azureMediaServicesClient.assets.deleteMethod(
-          resourceGroup,
-          accountName,
-          outputAsset.name
-        );
-
-        let jobInputAsset = input;
-        if (jobInputAsset && jobInputAsset.assetName) {
-          await azureMediaServicesClient.assets.deleteMethod(
-            resourceGroup,
-            accountName,
-            jobInputAsset.assetName
-          );
-        }
-      } else if (job.state == 'Error') {
-        _log(`${job.name} failed. Error details:`);
-        _log(job.outputs[0].error);
-      } else if (job.state == 'Canceled') {
-        _log(`${job.name} was unexpectedly canceled.`);
-      } else {
-        _log(
-          `${job.name} is still in progress.  Current state is ${job.state}.`
-        );
-      }
-      _log('done with sample');
-    } catch (err) {
-      _log(err);
-    }
+    //await processVideBlob();
   }
 );
-
-async function downloadResults(
-  resourceGroup,
-  accountName,
-  assetName,
-  resultsFolder
-) {
-  let date = new Date();
-  date.setHours(date.getHours() + 1);
-  let input = {
-    permissions: 'Read',
-    expiryTime: date,
-  };
-  let assetContainerSas = await azureMediaServicesClient.assets.listContainerSas(
-    resourceGroup,
-    accountName,
-    assetName,
-    input
-  );
-
-  let containerSasUrl = assetContainerSas.assetContainerSasUrls[0] || null;
-  let sasUri = url.parse(containerSasUrl);
-  let sharedBlobService = azureStorage.createBlobServiceWithSas(
-    sasUri.host,
-    sasUri.search
-  );
-  let containerName = sasUri.pathname.replace(/^\/+/g, '');
-  let directory = path.join(resultsFolder, assetName);
-  try {
-    fs.mkdirSync(directory);
-  } catch (err) {
-    // directory exists
-  }
-  _log(`gathering blobs in container ${containerName}...`);
-  function createBlobListPromise() {
-    return new Promise(function(resolve, reject) {
-      return sharedBlobService.listBlobsSegmented(
-        containerName,
-        null,
-        (err, result, response) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(result);
-        }
-      );
-    });
-  }
-  let blobs = await createBlobListPromise();
-  _log('downloading blobs to local directory in background...');
-  for (let i = 0; i < blobs.entries.length; i++) {
-    let blob = blobs.entries[i];
-    if (blob.blobType == 'BlockBlob') {
-      sharedBlobService.getBlobToLocalFile(
-        containerName,
-        blob.name,
-        path.join(directory, blob.name),
-        (error, result) => {
-          if (error) _log(error);
-        }
-      );
-    }
-  }
-}
 
 async function waitForJobToFinish(
   resourceGroup,
@@ -310,34 +358,6 @@ async function submitJob(
       outputs: jobOutputs,
     }
   );
-}
-
-function selectTransform(preset) {
-  if (audioExtensions.indexOf(inputExtension) > -1 || preset == AUDIO_ANALIZE) {
-    return audioAnalyzerTransformName;
-  } else {
-    return videoAnalyzerTransformName;
-  }
-}
-
-async function getJobInputFromArguments(
-  //resourceGroup,
-  //accountName,
-  uniqueness
-) {
-  if (inputFile) {
-    let assetName = namePrefix + '-input-' + uniqueness;
-    await createInputAsset(resourceGroup, accountName, assetName, inputFile);
-    return {
-      odatatype: '#Microsoft.Media.JobInputAsset',
-      assetName: assetName,
-    };
-  } else {
-    return {
-      odatatype: '#Microsoft.Media.JobInputHttp',
-      files: [inputUrl],
-    };
-  }
 }
 
 async function createOutputAsset(resourceGroup, accountName, assetName) {
@@ -442,10 +462,8 @@ function videoAnalyzerPreset() {
   };
 }
 
-function parseArguments() {
-  if (inputFile) {
-    inputExtension = path.extname(inputFile);
-  } else {
-    inputExtension = path.extname(inputUrl);
-  }
-}
+const serv = {
+  processVideBlob: processVideBlob,
+};
+
+module.exports = serv;
