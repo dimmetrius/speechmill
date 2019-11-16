@@ -1,0 +1,31 @@
+{
+  "name": "speechmill",
+  "version": "1.0.0",
+  "description": "speechmill",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dimmetrius/speechmill.git"
+  },
+  "keywords": [
+    "speech"
+  ],
+  "author": "dimmetrius",
+  "license": "ISC",
+  "dependencies": {
+    "azure-arm-mediaservices": "^4.0.0",
+    "azure-storage": "^2.8.0",
+    "microsoft-cognitiveservices-speech-sdk": "^1.8.0",
+    "ms-rest": "^2.3.3",
+    "ms-rest-azure": "^2.5.5",
+    "node-audiorecorder": "^1.4.1",
+    "node-record-lpcm16": "^1.0.1"
+  },
+  "bugs": {
+    "url": "https://github.com/dimmetrius/speechmill/issues"
+  },
+  "homepage": "https://github.com/dimmetrius/speechmill#readme"
+}
