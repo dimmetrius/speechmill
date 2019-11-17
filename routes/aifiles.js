@@ -31,12 +31,14 @@ router.get('/:videoId', (req, res, next) => {
       };
 
       if (data.entries.length) {
-        viewData.files = data.entries.map(entry => {
-          const split = entry.name.split('/');
-          const id = split[0];
-          const nm = split[1];
-          return { ...entry, id, nm };
-        });
+        viewData.files = data.entries
+          .map(entry => {
+            const split = entry.name.split('/');
+            const id = split[0];
+            const nm = split[1];
+            return { ...entry, id, nm };
+          })
+          .filter(el => el.id === videoId);
       }
     }
 
