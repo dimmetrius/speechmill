@@ -1,6 +1,5 @@
-<h1>Video Analisys</h1>
-
 {{#each this.videos}}
+<h1>Video Analisys: {{nm}}</h1>
 <video id='video' width="600" controls
   src="https://{{../accountName}}.blob.core.windows.net/{{../containerName}}/{{name}}">
   <track default src="/airesult/{{id}}/transcript.vtt">

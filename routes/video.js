@@ -35,7 +35,8 @@ router.get('/:videoId', (req, res, next) => {
         viewData.videos = data.entries
           .filter(entry => entry.name.indexOf(videoId + '/') == 0)
           .map(data => {
-            return { ...data, id: videoId };
+            const nm = data.name.split('/')[1];
+            return { ...data, id: videoId, nm };
           });
       }
     }
