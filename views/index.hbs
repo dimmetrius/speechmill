@@ -12,6 +12,7 @@
 <h2>Processed Videos</h2>
 {{#each this.thumbnails}}
 <a href="/video/{{id}}"><video width="300" height="170"
+    poster="https://{{../accountName}}.blob.core.windows.net/transcriptions/stub.jpg"
     src="https://{{../accountName}}.blob.core.windows.net/{{../containerName}}/{{name}}">
   </video></a>
 {{/each}}
