@@ -6,11 +6,11 @@ const express = require('express'),
   router = express.Router(),
   azureStorage = require('azure-storage'),
   blobService = azureStorage.createBlobService(),
-  containerName = 'videos',
   config = require('../config');
 
-router.get('/', (req, res, next) => {
-  blobService.listBlobsSegmented(containerName, null, (err, data) => {
+router.get('/:videoId', (req, res, next) => {
+  const videoId = req.param('videoId');
+  blobService.listBlobsSegmented('videos', null, (err, data) => {
     let viewData;
 
     if (err) {
@@ -24,18 +24,19 @@ router.get('/', (req, res, next) => {
       res.status(500);
     } else {
       viewData = {
+        message: 'MSG',
         title: 'Home',
-        viewName: 'index',
+        viewName: 'video',
         accountName: config.getStorageAccountName(),
-        containerName: containerName,
+        containerName: 'videos',
       };
 
       if (data.entries.length) {
-        viewData.thumbnails = data.entries.map(entry => {
-          const split = entry.name.split('/');
-          const id = split[0];
-          return { ...entry, id };
-        });
+        viewData.videos = data.entries
+          .filter(entry => entry.name.indexOf(videoId + '/') == 0)
+          .map(data => {
+            return { ...data, id: videoId };
+          });
       }
     }
 

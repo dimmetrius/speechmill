@@ -1,0 +1,100 @@
+<h1>Video Analisys</h1>
+
+{{#each this.videos}}
+<video id='video' width="600" controls
+  src="https://{{../accountName}}.blob.core.windows.net/{{../containerName}}/{{name}}">
+  <track default src="/airesult/{{id}}/transcript.vtt">
+</video>
+
+<br>
+<h1>Insights</h1>
+<div id="transcription"></div>
+<div id='faces'></div>
+<div id='labels'></div>
+<div id='sentiments'></div>
+<script>
+  function setVideoTime(num) {
+    const videoEl = document.getElementById("video");
+    videoEl.currentTime = num;
+    videoEl.scrollIntoView();
+  }
+
+  function jumpTo(str) {
+    const timeParts = str.split(':');
+    if (timeParts.length === 3) {
+      const sec = parseFloat(timeParts[0]) * 60 * 60 + parseFloat(timeParts[1]) * 60 + parseFloat(timeParts[2])
+      setVideoTime(sec);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+
+    const insightsFetch = await fetch("/airesult/{{id}}/insights.json");
+    const insights = await insightsFetch.json();
+    const transcript = insights.transcript || [];
+
+    const transcription = transcript.map(el => el.text).join('');
+
+    if (transcription) {
+      const el = document.getElementById('transcription');
+      var oh = document.createElement("h2");
+      oh.innerText = 'Transcription:';
+      el.appendChild(oh);
+
+      var div = document.createElement("div");
+      div.innerText = transcription;
+      el.append(div);
+    }
+
+    const faces = insights.faces || [];
+
+    if (faces.length) {
+      const el = document.getElementById('faces');
+      var oh = document.createElement("h2");
+      oh.innerText = 'Faces:';
+      el.appendChild(oh);
+
+      faces.forEach(f => {
+        var oImg = document.createElement("img");
+        oImg.setAttribute('src', "/airesult/{{id}}/" + "FaceThumbnail_" + f.thumbnailId + ".jpg");
+        oImg.setAttribute('width', '150px');
+        oImg.setAttribute('class', 'face_img');
+        el.appendChild(oImg);
+      })
+    }
+
+    const labels = insights.labels || [];
+
+    if (labels.length) {
+      const el = document.getElementById('labels');
+      var oh = document.createElement("h2");
+      oh.innerText = 'Labels:';
+      el.appendChild(oh);
+
+      labels.forEach(f => {
+        var oLabel = document.createElement("div");
+        const start = ((f.instances || [])[0] || {})['start']
+        oLabel.innerText = f.name;
+        oLabel.onclick = () => { jumpTo(start) }
+        el.appendChild(oLabel);
+      })
+    }
+
+    const sentiments = insights.sentiments || [];
+
+    if (sentiments.length) {
+      const el = document.getElementById('sentiments');
+      var oh = document.createElement("h2");
+      oh.innerText = 'Sentiments:';
+      el.appendChild(oh);
+
+      sentiments.forEach(f => {
+        var oLabel = document.createElement("div");
+        oLabel.innerText = f.sentimentType;
+        el.appendChild(oLabel);
+      })
+    }
+
+  });
+</script>
+{{/each}}

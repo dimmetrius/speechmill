@@ -7,6 +7,9 @@ const bodyParser = require('body-parser');
 
 const index = require('./routes/index');
 const upload = require('./routes/upload');
+const video = require('./routes/video');
+const transcriptions = require('./routes/transcriptions');
+const airesult = require('./routes/airesult');
 
 const app = express();
 
@@ -23,6 +26,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', index);
 app.use('/upload', upload);
+app.use('/video', video);
+app.use('/transcription', transcriptions);
+app.use('/airesult', airesult);
 
 // catch 404 and forward to error handler
 app.use((req, res, next) => {

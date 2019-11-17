@@ -11,25 +11,27 @@
 
 <h2>Processed Videos</h2>
 {{#each this.thumbnails}}
-  <video width="300" height="170" src="https://{{../accountName}}.blob.core.windows.net/{{../containerName}}/{{name}}"></video>
+<a href="/video/{{id}}"><video width="300" height="170"
+    src="https://{{../accountName}}.blob.core.windows.net/{{../containerName}}/{{name}}">
+  </video></a>
 {{/each}}
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
 
-      const message = document.getElementById('message');
-      const picker = document.getElementById('file-picker');
+    const message = document.getElementById('message');
+    const picker = document.getElementById('file-picker');
 
-      document.getElementById('upload-form').addEventListener('submit', (e) => {
+    document.getElementById('upload-form').addEventListener('submit', (e) => {
 
-        message.innerText = '';
+      message.innerText = '';
 
-        if (!picker.files.length) {
-          message.innerText = 'Please select an video to upload.';
-          e.preventDefault();
-          return false;
-        }
-      });
-
+      if (!picker.files.length) {
+        message.innerText = 'Please select an video to upload.';
+        e.preventDefault();
+        return false;
+      }
     });
-  </script>
+
+  });
+</script>

@@ -34,6 +34,8 @@ const _log = value => {
 
 const DELETE_ASSETS = true;
 
+const processing = {};
+
 // endpoint config
 // make sure your URL values end with '/'
 
@@ -207,7 +209,7 @@ const processVideBlob = async (id, nm) => {
     );
 
     // Choose between the Audio and Video analyzer transforms
-    let transformName = selectTransform(AUDIO_ANALIZE);
+    let transformName = selectTransform(/*AUDIO_ANALIZE*/);
 
     _log('submitting job...');
     let job = await submitJob(
@@ -462,8 +464,13 @@ function videoAnalyzerPreset() {
   };
 }
 
+const getStatus = id => {
+  return processing[id];
+};
+
 const serv = {
   processVideBlob: processVideBlob,
+  status: getStatus,
 };
 
 module.exports = serv;
