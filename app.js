@@ -10,6 +10,7 @@ const upload = require('./routes/upload');
 const video = require('./routes/video');
 const transcriptions = require('./routes/transcriptions');
 const airesult = require('./routes/airesult');
+const aifiles = require('./routes/aifiles');
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/upload', upload);
 app.use('/video', video);
 app.use('/transcription', transcriptions);
 app.use('/airesult', airesult);
+app.use('/aifiles', aifiles);
 
 // catch 404 and forward to error handler
 app.use((req, res, next) => {
